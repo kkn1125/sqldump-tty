@@ -1,0 +1,96 @@
+#! /usr/bin/env bash
+
+# 메뉴 옵션 배열
+OPTIONS=("인사하기" "현재 시간 보기" "종료")
+
+# 현재 선택된 옵션 인덱스
+current=0
+
+# 옵션의 총 개수
+num_options=${#OPTIONS[@]}
+
+# 메뉴를 그리는 함수
+draw_menu() {
+    clear
+    echo "화살표 키로 메뉴를 탐색하고 Enter 키로 선택하세요:"
+    echo
+
+    for i in "${!OPTIONS[@]}"; do
+        if [ "$i" -eq "$current" ]; then
+            # 선택된 옵션은 녹색 화살표와 함께 표시
+            echo -e "\e[1;32m> ${OPTIONS[i]}\e[0m"
+        else
+            # 선택되지 않은 옵션은 일반 텍스트로 표시
+            echo "  ${OPTIONS[i]}"
+        fi
+    done
+}
+
+# 단일 키 입력을 읽는 함수
+read_key() {
+    IFS= read -rsn1 key # 첫 번째 문자 읽기
+    if [[ $key == $'\x1b' ]]; then
+        # ESC 문자가 감지되면, 두 개의 추가 문자 읽기
+        read -rsn2 key
+        key=$'\x1b'"$key"
+    fi
+    echo "$key"
+}
+
+# 커서 숨기기
+tput civis
+
+# 터미널을 RAW 모드로 설정 (입력 버퍼링 해제)
+stty -echo -icanon time 0 min 0
+
+# 스크립트 종료 시 터미널 설정 복원
+trap 'stty sane; tput cnorm; clear; exit' SIGINT SIGTERM
+
+# 초기 메뉴 그리기
+draw_menu
+
+# 메인 루프
+while true; do
+    key=$(read_key)
+
+    case "$key" in
+    $'\x1b[A') # 위 화살표
+        ((current--))
+        if [ "$current" -lt 0 ]; then
+            current=$(($num_options - 1))
+        fi
+        draw_menu
+        ;;
+    $'\x1b[B') # 아래 화살표
+        ((current++))
+        if [ "$current" -ge "$num_options" ]; then
+            current=0
+        fi
+        draw_menu
+        ;;
+    '') # Enter 키
+        clear
+        case "$current" in
+        0)
+            echo "안녕하세요!"
+            ;;
+        1)
+            echo "현재 시간: $(date)"
+            ;;
+        2)
+            echo "프로그램을 종료합니다."
+            ;;
+        esac
+        break
+        ;;
+    *)
+        # 다른 키는 무시
+        ;;
+    esac
+done
+
+# 커서 다시 표시
+tput cnorm
+
+# 터미널 설정 복원
+stty sane
