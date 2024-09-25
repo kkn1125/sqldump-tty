@@ -17,17 +17,29 @@ let globalOutputDir = "";
 let username = "";
 let passwd = "";
 
-function getConnection() {
-  return mysql.createConnection({
-    host: DB_HOST,
-    user: DB_USER,
-    password: DB_PW,
+function runProcess() {
+  getDbInfo().then(() => {
+    function getConnection() {
+      return mysql.createConnection({
+        host: DB_HOST,
+        user: username,
+        password: passwd,
+      });
+    }
+    getConnection()
+      .then(async (conn: mysql.Connection) => {
+        console.log("✨ 인증되었습니다.");
+        await prompt(conn);
+      })
+      .catch(() => {
+        username = "";
+        passwd = "";
+        runProcess();
+      });
   });
 }
 
-getConnection().then(async (conn: mysql.Connection) => {
-  await prompt(conn);
-});
+runProcess();
 
 async function prompt(conn: mysql.Connection) {
   const [databases] = await conn.query(
@@ -150,7 +162,7 @@ async function openExportDir(schema: string) {
   }
 }
 
-async function saveSqlProcess(schema: string) {
+async function getDbInfo() {
   if (username === "") {
     username = await input({
       message: "데이터베이스 username을 적으세요.",
@@ -163,7 +175,6 @@ async function saveSqlProcess(schema: string) {
     });
     if (reinput === "직접입력하겠습니다.") {
       username = "";
-      saveSqlProcess(schema);
     }
   }
   if (passwd === "") {
@@ -178,9 +189,27 @@ async function saveSqlProcess(schema: string) {
     });
     if (reinput === "직접입력하겠습니다.") {
       username = "";
-      saveSqlProcess(schema);
     }
   }
+  await new Promise((resolve) => {
+    console.log("🛠️ 데이터베이스 접근 확인 중 입니다...", globalOutputDir);
+
+    const sqlDump = spawn("mysql", [
+      `-u${username}`,
+      `-p${passwd}`,
+      "-e",
+      '"select 1"',
+    ]);
+    sqlDump.on("close", () => {
+      resolve(true);
+    });
+  });
+}
+
+async function saveSqlProcess(schema: string) {
+  // if (!(await getDbInfo())) {
+  //   saveSqlProcess(schema);
+  // }
 
   await new Promise((resolve) => {
     console.log("🛠️ sql 파일 저장 중입니다...", globalOutputDir);
