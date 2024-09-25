@@ -4,6 +4,7 @@
     "module": "CommonJS",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "Node",
     "strict": true,
     "skipLibCheck": true,
     "noUnusedLocals": false,

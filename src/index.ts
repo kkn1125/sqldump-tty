@@ -1,13 +1,21 @@
-import { checkbox, select, Separator } from "@inquirer/prompts";
+import {
+  checkbox,
+  input,
+  password,
+  select,
+  Separator,
+} from "@inquirer/prompts";
 import { spawn } from "child_process";
 import dayjs from "dayjs";
 import Excel from "exceljs";
-import fs from "fs";
+import fs, { readdirSync } from "fs";
 import mysql from "mysql2/promise";
 import path from "path";
 import { DB_HOST, DB_PW, DB_USER, OUTPUT_DIR } from "./common/variables";
 
 let globalOutputDir = "";
+let username = "";
+let passwd = "";
 
 function getConnection() {
   return mysql.createConnection({
@@ -31,7 +39,13 @@ async function prompt(conn: mysql.Connection) {
 
   const schema: string = await select({
     message: "백업할 스키마를 선택하세요.",
-    choices: [...databaseList, new Separator(), "종료"],
+    choices: [
+      ...databaseList,
+      new Separator(),
+      "설치 폴더 열기",
+      "설치 폴더 선택 열기",
+      "종료",
+    ],
     loop: false,
   });
   console.log(`✅ Selcted: ${schema}`);
@@ -39,6 +53,19 @@ async function prompt(conn: mysql.Connection) {
   switch (true) {
     case databaseList.includes(schema):
       break;
+    case schema === "설치 폴더 열기":
+      await new Promise((resolve) => {
+        const start = spawn("cmd", ["/C", "start", OUTPUT_DIR]);
+        start.on("close", () => {
+          resolve(true);
+        });
+      });
+      prompt(conn);
+      return;
+    case schema === "설치 폴더 선택 열기":
+      await selectOpen();
+      prompt(conn);
+      return;
     case schema === "종료":
       process.exit(0);
   }
@@ -55,8 +82,8 @@ async function prompt(conn: mysql.Connection) {
   const choice = await select({
     message: "메뉴를 선택하세요.",
     choices: [
-      "전체 테이블 xlsx로 내보내기",
-      "선택 테이블 xlsx로 내보내기",
+      "전체 테이블 xlsx,csv,sql로 내보내기",
+      "선택 테이블 xlsx,csv,sql로 내보내기",
       new Separator(),
       "다른 스키마 선택",
       "종료",
@@ -64,13 +91,15 @@ async function prompt(conn: mysql.Connection) {
   });
 
   switch (choice) {
-    case "전체 테이블 xlsx로 내보내기":
+    case "전체 테이블 xlsx,csv,sql로 내보내기":
       await allTableXlsxExport(conn, schema);
       console.log("✨ 저장되었습니다.");
+      await openExportDir(schema);
       prompt(conn);
       break;
-    case "선택 테이블 xlsx로 내보내기":
+    case "선택 테이블 xlsx,csv,sql로 내보내기":
       await selectedTablesExport(conn, schema);
+      await openExportDir(schema);
       prompt(conn);
       break;
     case "다른 스키마 선택":
@@ -103,7 +132,112 @@ function modifyEncoding<T extends object>(obj: T) {
   );
 }
 
+async function openExportDir(schema: string) {
+  const selected: string = await select({
+    message: "저장된 폴더를 여시겠습니까?",
+    choices: ["예", "아니오"],
+    loop: false,
+  });
+  switch (selected) {
+    case "예":
+      await selectOpen(schema);
+      break;
+    case "아니오":
+      break;
+    default:
+      openExportDir(schema);
+      break;
+  }
+}
+
+async function saveSqlProcess(schema: string) {
+  if (username === "") {
+    username = await input({
+      message: "데이터베이스 username을 적으세요.",
+      required: true,
+    });
+  } else {
+    const reinput = await select({
+      message: "이전에 입력한 username으로 진행할까요?",
+      choices: ["예", "직접입력하겠습니다."],
+    });
+    if (reinput === "직접입력하겠습니다.") {
+      username = "";
+      saveSqlProcess(schema);
+    }
+  }
+  if (passwd === "") {
+    passwd = await password({
+      message: "데이터베이스 password을 적으세요.",
+      mask: "#",
+    });
+  } else {
+    const reinput = await select({
+      message: "이전에 입력한 password으로 진행할까요?",
+      choices: ["예", "직접입력하겠습니다."],
+    });
+    if (reinput === "직접입력하겠습니다.") {
+      username = "";
+      saveSqlProcess(schema);
+    }
+  }
+
+  await new Promise((resolve) => {
+    console.log("🛠️ sql 파일 저장 중입니다...", globalOutputDir);
+
+    const sqlDump = spawn("cmd", [
+      "/C",
+      "mysqldump",
+      `-u${username}`,
+      `-p${passwd}`,
+      "--databases",
+      schema,
+      ">",
+      `${path.join(globalOutputDir, `${schema}_output.sql`)}`,
+    ]);
+    sqlDump.on("close", () => {
+      console.log(
+        "✨ sql 파일 저장이 완료되었습니다!:",
+        path.join(globalOutputDir, `${schema}_output.sql`)
+      );
+      resolve(true);
+    });
+  });
+}
+
+async function selectOpen(selected: string = "") {
+  const dirs = readdirSync(path.join(OUTPUT_DIR, "output"));
+
+  if (selected === "") {
+    selected = await select({
+      message: "폴더를 선택해주세요.",
+      choices: [...dirs, new Separator(), "돌아가기"],
+      loop: false,
+    });
+  }
+
+  switch (true) {
+    case dirs.includes(selected):
+      await new Promise((resolve) => {
+        const start = spawn("cmd", [
+          "/C",
+          "start",
+          path.join(OUTPUT_DIR, "output", selected),
+        ]);
+        start.on("close", () => {
+          resolve(true);
+        });
+      });
+      break;
+    case selected === "돌아가기":
+    default:
+      break;
+  }
+}
+
 async function allTableXlsxExport(conn: mysql.Connection, schema: string) {
+  await saveSqlProcess(schema);
+
   const [tables] = await conn.query(
     `select table_name from information_schema.\`tables\` where information_schema.\`tables\`.table_schema = ?`,
     [schema]
@@ -184,7 +318,6 @@ async function selectedTablesExport(conn: mysql.Connection, schema: string) {
       [schema]
     );
     const tableNames = (tables as any[]).map(({ table_name }) => table_name);
-    console.log("tableNames", tableNames);
 
     // 사용자에게 내보낼 테이블 선택하도록 프롬프트
     const selectedTables: string[] = await checkbox({
@@ -203,6 +336,8 @@ async function selectedTablesExport(conn: mysql.Connection, schema: string) {
       console.log("❌ 작업이 취소되었습니다.");
       return;
     }
+
+    await saveSqlProcess(schema);
 
     // 선택한 테이블만 내보내기
     const workbook = new Excel.Workbook();
