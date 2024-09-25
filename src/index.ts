@@ -13,9 +13,24 @@ import mysql from "mysql2/promise";
 import path from "path";
 import { DB_HOST, DB_PW, DB_USER, OUTPUT_DIR } from "./common/variables";
 
+const fileExists = fs.existsSync("./.env");
+
+if (fileExists) {
+  console.log("환경변수파일을 적용합니다.");
+} else {
+  console.log("환경변수파일이 없습니다. 환경변수 적용 하려면 설정해주세요.");
+  console.log(`
+# .env example
+DB_HOST = <host ip or domain>
+DB_USER = <username>
+DB_PW = <password>
+OUTPUT_DIR = <"c:\\database_backup"> <default is ./>
+`);
+}
+
 let globalOutputDir = "";
-let username = "";
-let passwd = "";
+let username = DB_USER;
+let passwd = DB_PW;
 
 function runProcess() {
   getDbInfo().then(() => {
@@ -170,7 +185,7 @@ async function getDbInfo() {
     });
   } else {
     const reinput = await select({
-      message: "이전에 입력한 username으로 진행할까요?",
+      message: "지정된 username으로 진행할까요?",
       choices: ["예", "직접입력하겠습니다."],
     });
     if (reinput === "직접입력하겠습니다.") {
@@ -184,7 +199,7 @@ async function getDbInfo() {
     });
   } else {
     const reinput = await select({
-      message: "이전에 입력한 password으로 진행할까요?",
+      message: "지정된 password으로 진행할까요?",
       choices: ["예", "직접입력하겠습니다."],
     });
     if (reinput === "직접입력하겠습니다.") {

@@ -1,44 +1,44 @@
-const path = require("path");
-const nodeExternals = require("webpack-node-externals");
+const path = require('path');
+const webpack = require('webpack');
 
 module.exports = {
-  entry: "./src/index.ts",
-  target: "node",
-  externals: [nodeExternals()],
-  mode: "production",
+  entry: './src/index.ts', // 진입점 설정
+  output: {
+    filename: 'index.js',
+    path: path.resolve(__dirname, 'dist'),
+  },
+  target: 'node', // Node.js 환경을 대상으로 설정
+  mode: 'production', // 필요에 따라 'development'로 변경
   module: {
     rules: [
       {
         test: /\.tsx?$/,
-        use: "ts-loader",
-        exclude: /node_modules/,
+        use: {
+          loader: 'ts-loader',
+          options: {
+            allowTsInNodeModules: true, // node_modules 내의 TS 파일 처리 허용
+          },
+        },
       },
     ],
   },
-  node: {
-    __dirname: false,
-    __filename: false,
-  },
   resolve: {
-    extensions: [".tsx", ".ts", ".js"],
-    preferRelative: true,
-    alias: {
-      // 'node:' 접두사를 제거하여 모듈을 참조하도록 설정
-      "node:tty": "tty",
-      // 필요한 다른 모듈들도 동일하게 설정
-    },
+    extensions: ['.ts', '.js'],
     fallback: {
       fs: false,
       net: false,
       tls: false,
       tty: false,
-      // 브라우저 환경에서 필요한 폴리필 설정
-      // tty: require.resolve("tty-browserify"),
-      // 필요한 다른 모듈들도 추가
+      path: false,
     },
   },
-  output: {
-    filename: "index.js",
-    path: path.resolve(__dirname, "dist"),
-  },
+  plugins: [
+    new webpack.ContextReplacementPlugin(
+      /@inquirer[\/\\]prompts/,
+      path.resolve(__dirname, 'node_modules/@inquirer/prompts'),
+      {
+        './': '@inquirer/prompts',
+      }
+    ),
+  ],
 };
