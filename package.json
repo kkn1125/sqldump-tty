@@ -23,6 +23,7 @@
     "dayjs": "^1.11.13",
     "exceljs": "^4.4.0",
     "inquirer": "^11.0.2",
-    "mysql2": "^3.11.3"
+    "mysql2": "^3.11.3",
+    "sqldump": "file:"
   }
 }

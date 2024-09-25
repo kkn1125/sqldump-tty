@@ -1,12 +1,11 @@
-import { select, checkbox, Separator } from "@inquirer/prompts";
-import { execSync, spawn } from "child_process";
+import { checkbox, select, Separator } from "@inquirer/prompts";
+import { spawn } from "child_process";
 import dayjs from "dayjs";
 import Excel from "exceljs";
+import fs from "fs";
 import mysql from "mysql2/promise";
 import path from "path";
 import { DB_HOST, DB_PW, DB_USER, OUTPUT_DIR } from "./common/variables";
-import fs from "fs";
-import { Blob } from "buffer";
 
 let globalOutputDir = "";
 
@@ -26,12 +25,24 @@ async function prompt(conn: mysql.Connection) {
   const [databases] = await conn.query(
     "select schema_name from information_schema.`schemata` where schema_name != 'mysql' and schema_name != 'test' and schema_name != 'information_schema'"
   );
+  const databaseList = (databases as unknown as { schema_name: string }[]).map(
+    ({ schema_name }) => schema_name
+  );
 
   const schema: string = await select({
     message: "백업할 스키마를 선택하세요.",
-    choices: (databases as any[]).map(({ schema_name }) => schema_name),
+    choices: [...databaseList, new Separator(), "종료"],
+    loop: false,
   });
   console.log(`✅ Selcted: ${schema}`);
+
+  switch (true) {
+    case databaseList.includes(schema):
+      break;
+    case schema === "종료":
+      process.exit(0);
+  }
+
   globalOutputDir = path.join(OUTPUT_DIR, "output", schema);
 
   await new Promise((resolve) => {
