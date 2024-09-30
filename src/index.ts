@@ -11,9 +11,23 @@ import Excel from "exceljs";
 import fs, { readdirSync } from "fs";
 import mysql from "mysql2/promise";
 import path from "path";
-import { DB_HOST, DB_PW, DB_USER, OUTPUT_DIR } from "./common/variables";
+import {
+  DB_HOST,
+  DB_PW,
+  DB_USER,
+  OUTPUT_DIR,
+  VERSION,
+} from "./common/variables";
 
 const fileExists = fs.existsSync("./.env");
+let controller = new AbortController();
+
+const excludeSchemas = [
+  "mysql",
+  "test",
+  "information_schema",
+  "performance_schema",
+];
 
 if (fileExists) {
   console.log("환경변수파일을 적용합니다.");
@@ -58,7 +72,10 @@ runProcess();
 
 async function prompt(conn: mysql.Connection) {
   const [databases] = await conn.query(
-    "select schema_name from information_schema.`schemata` where schema_name != 'mysql' and schema_name != 'test' and schema_name != 'information_schema'"
+    `select schema_name from information_schema.\`schemata\` where schema_name not in (${excludeSchemas.map(
+      () => "?"
+    )})`,
+    excludeSchemas
   );
   const databaseList = (databases as unknown as { schema_name: string }[]).map(
     ({ schema_name }) => schema_name
@@ -69,15 +86,20 @@ async function prompt(conn: mysql.Connection) {
     choices: [
       ...databaseList,
       new Separator(),
+      "버전 확인",
       "설치 폴더 열기",
       "설치 폴더 선택 열기",
       "종료",
     ],
     loop: false,
   });
-  console.log(`✅ Selcted: ${schema}`);
+  // console.log(`✅ Selcted: ${schema}`);
 
   switch (true) {
+    case schema === "버전 확인":
+      console.log("✅ SQL Dump Version: %s", VERSION);
+      prompt(conn);
+      return;
     case databaseList.includes(schema):
       break;
     case schema === "설치 폴더 열기":
