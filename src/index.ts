@@ -256,6 +256,8 @@ async function saveSqlProcess(schema: string) {
       "mysqldump",
       `-u${username}`,
       `-p${passwd}`,
+      "--routines",
+      "--trigger",
       "--databases",
       schema,
       ">",
